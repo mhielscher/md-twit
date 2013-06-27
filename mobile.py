@@ -15,6 +15,31 @@ __version__ = "dev.%s" % (time.strftime("%Y.%m.%d", time.localtime(os.path.getmt
 
 current_uri = "_blank"
 
+def get_active_window(root=None):
+    """Returns the active (focused, top) window, or None."""
+    root = root or gtk.gdk.get_root_window()
+    # Make sure active window hinting is working
+    if root.supports_net_wm_hint("_NET_ACTIVE_WINDOW") and root.supports_net_wm_hint("_NET_WM_WINDOW_TYPE"):
+        active = root.get_active_window()
+        # If active window is a desktop, fail
+        if active.property_get("_NET_WM_WINDOW_TYPE")[-1][0] == '_NET_WM_WINDOW_TYPE_DESKTOP':
+            return None
+        return active
+    else:
+        return None
+
+def get_active_monitor(root=None):
+    """Returns the index of the active monitor, or -1 if undetermined."""
+    root = root or gtk.gdk.get_root_window()
+    num_monitors = root.get_n_monitors()
+    if (num_monitors == 1):
+        return 0
+    active = get_active_window()
+    if active != None:
+        return root.get_monitor_at_window(active)
+    else:
+        return -1
+
 # Recursively follow redirects until there isn't a location header
 def resolve_http_redirect(url, depth=0):
     if depth > 10:
@@ -82,10 +107,18 @@ view.set_settings(settings)
 sw = gtk.ScrolledWindow()
 sw.add(view)
 
+root = gtk.gdk.screen_get_default()
+root_win = root.get_root_window()
+cursor = root_win.get_pointer()
+monitor = root.get_monitor_at_point(*cursor[:2])
+m_x, m_y, m_w, m_h = root.get_monitor_geometry(monitor)
+x = m_x + m_w - 340
+y = m_y
+
 win = gtk.Window()
 win.set_size_request(200, 400)
 win.resize(340, 700)
-win.move(1280-340, 24)
+win.move(x, y)
 win.add(sw)
 win.set_title("Twitter")
 win.connect("destroy", gtk.main_quit)
