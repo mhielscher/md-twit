@@ -10,7 +10,8 @@ import requests
 import time
 import os
 
-__version__ = "dev.%s" % (time.strftime("%Y.%m.%d", time.localtime(os.path.getmtime(__file__))))
+__filepath__ = os.path.realpath(os.path.abspath(__file__))
+__version__ = "dev.%s" % (time.strftime("%Y.%m.%d", time.localtime(os.path.getmtime(__filepath__))))
 
 current_uri = "_blank"
 
