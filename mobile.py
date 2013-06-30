@@ -75,7 +75,8 @@ def on_nav_req(view, frame, req, data=None):
 
 def open_external_link(view, frame, req, nav_action, decision, data=None):
     print "Externally open %s" % req.get_uri()
-    webbrowser.open_new_tab(resolve_http_redirect(req.get_uri()))
+    #webbrowser.open_new_tab(resolve_http_redirect(req.get_uri()))
+    webbrowser.open_new_tab(req.get_uri())
     return True
 
 def reload_and_schedule():
