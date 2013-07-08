@@ -65,7 +65,7 @@ def on_nav_req(view, frame, req, data=None):
     print "Nav to %s" % req.get_uri()
     #end_url = resolve_http_redirect(req.get_uri())
     #if 'photo' in end_url and 'twitter.com' in end_url:
-    if 't.co' in req.get_uri():
+    if 't.co' in req.get_uri() or ('twitter.com' in req.get_uri() and 'photo' in req.get_uri()):
         #req.set_uri(end_url)
         return open_external_link(view, frame, req, None, None, data)
     global current_uri
