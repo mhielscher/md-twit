@@ -11,6 +11,7 @@ import urlparse
 import requests
 import time
 import os
+import logging
 
 __filepath__ = os.path.realpath(os.path.abspath(__file__))
 __version__ = "dev.%s" % (time.strftime("%Y.%m.%d", time.localtime(os.path.getmtime(__filepath__))))
@@ -21,6 +22,9 @@ __version__ = "dev.%s" % (time.strftime("%Y.%m.%d", time.localtime(os.path.getmt
 
 # Twitter URL
 main_url = "https://mobile.twitter.com/"
+
+# Time between refreshes in seconds
+refresh_time = 60
 
 # Directory path for config file and cookie file
 config_dir_path = '.'
@@ -56,8 +60,11 @@ default_height = 700
 min_width = 200
 min_height = 400
 
-# Time between refreshes in seconds
-refresh_time = 60
+# Debug level
+debuglevel = logging.DEBUG
+
+# Non-mobile photo workaround
+photo_workaround = True
 
 ##################
 # End of Config
@@ -80,7 +87,6 @@ cookie_path = os.path.join(config_dir_path, cookie_filename)
 ##################
 
 
-current_uri = "_blank"
 last_save = time.time()
 window_geometry = {'x': 0, 'y': 0, 'w': default_width, 'h': default_height}
 save_scheduled = False
@@ -141,7 +147,7 @@ def window_resized(win, event, data=None):
 		window_geometry['h'] = event.height
 		seconds_until_save = int(last_save + config_save_interval - time.time())
 		if not save_scheduled:
-			print "Scheduling save for %d" % seconds_until_save
+			#print "Scheduling save for %d" % seconds_until_save
 			if seconds_until_save > 0:
 				GLib.timeout_add_seconds(seconds_until_save, save_config)
 				save_scheduled = True
@@ -151,7 +157,7 @@ def window_resized(win, event, data=None):
 
 def save_config():
 	global window_geometry, last_save, save_scheduled
-	print "Saving new dimensions:", window_geometry
+	#print "Saving new dimensions:", window_geometry
 	config_file = open(config_path, 'w')
 	print >>config_file, "x: %d" % window_geometry['x']
 	print >>config_file, "y: %d" % (window_geometry['y']-32)
@@ -189,33 +195,88 @@ def load_cookies():
 	session.add_feature(cookiejar)
         
 def on_nav_req(view, frame, req, data=None):
-    print "Nav to %s" % req.get_uri()
+    logger.debug("Nav to %s" % req.get_uri())
     #end_url = resolve_http_redirect(req.get_uri())
     #if 'photo' in end_url and 'twitter.com' in end_url:
     if 't.co' in req.get_uri() or ('twitter.com' in req.get_uri() and 'photo' in req.get_uri()):
         #req.set_uri(end_url)
         return open_external_link(view, frame, req, None, None, data)
-    global current_uri
-    current_uri = req.get_uri()
-    #print current_uri
     return False
 
 def open_external_link(view, frame, req, nav_action, decision, data=None):
-    print "Externally open %s" % req.get_uri()
+    logger.debug("Externally open %s" % req.get_uri())
+    if photo_workaround and 'mobile.twitter.com' in req.get_uri() and 'photo' in req.get_uri():
+        uri = req.get_uri().replace('mobile.', '')
+        logger.debug("Workaround: %s", uri)
+        webbrowser.open_new_tab(uri)
+        return True
     #webbrowser.open_new_tab(resolve_http_redirect(req.get_uri()))
     webbrowser.open_new_tab(req.get_uri())
     return True
 
-def reload_main():
-    global current_uri
-    if current_uri in ("_blank", main_url):
-        print "Reloading... ", current_uri
+def anchor_tweets(view, event, data=None):
+    #print view.get_property('load-status')
+    if view.get_property('load-status') == WebKit.LoadStatus.FINISHED:
+        #logger.debug("Anchoring tweets:")
+        #view.execute_script("var tweets = document.getElementsByClassName('tweet'); for (var i=1; i<tweets.length; i++) { var tweetID = tweets[i].getAttribute('href').split('/')[3].split('?')[0]; tweets[i].setAttribute('id', tweetID); }")
+        tweets = view.get_dom_document().get_elements_by_class_name('tweet')
+        for i in xrange(1, tweets.get_length()):
+            tweetId = tweets.item(i).get_attribute('href').split('/')[3].split('?')[0]
+            tweets.item(i).set_attribute('id', tweetId)
+        logger.debug("Anchored tweet IDs from %s to %s.", tweets.item(1).get_attribute('id'), tweets.item(tweets.get_length()-1).get_attribute('id'))
+        params = urlparse.parse_qs(urlparse.urlparse(view.get_uri()).fragment)
+        if params:
+            top_id = params['id'][0]
+            scroll_amount = int(params['scroll'][0])
+            logger.debug("Starting with scroll_amount=%d" % (scroll_amount))
+            for i in xrange(1, tweets.get_length()):
+                if tweets.item(i).get_attribute('id') != top_id:
+                    scroll_amount += tweets.item(i).get_offset_height()
+                    logger.debug("Added %d to scroll; now at %d" % (tweets.item(i).get_offset_height(), scroll_amount))
+                else:
+                    break
+            adj = data.get_vadjustment()
+            logger.debug("Before: %d", adj.get_value())
+            adj.set_value(scroll_amount)
+            logger.debug("After: %d", adj.get_value())
+            #adj = data.get_vadjustment()
+            #print "After 2:", adj.get_value()
+            #print "lower=%f, upper=%f" % (adj.get_lower(), adj.get_upper())
+    return True
+
+def reload_main(view, sw):
+    if not view.get_uri().split('#')[0] == main_url:
+        print "Not refreshing: url = %s" % view.get_uri()
+        return True
+    
+    document = view.get_dom_document()
+    window = document.get_default_view()
+    window_top = window.get_page_y_offset()
+    nav = document.get_element_by_id('global_nav')
+    if nav:
+        min_scroll = nav.get_offset_top() + nav.get_offset_height()
+    else:
+        min_scroll = 0
+    #print "window_top=%d, min_scroll=%d" % (window_top, min_scroll)
+    if window_top > min_scroll:
+        tweets = view.get_dom_document().get_elements_by_class_name('tweet')
+        top_id = tweets.item(1).get_attribute('id')
+        scroll_amount = sw.get_vadjustment().get_value()
+        view.open("%s#id=%s&scroll=%d" % (main_url, top_id, scroll_amount))
+    else:
         view.open(main_url)
-    #GLib.timeout_add_seconds(60, reload_main)
     return True
 
 
 if __name__ == "__main__":
+	logger = logging.getLogger(__name__)
+	logger.setLevel(debuglevel)
+	ch = logging.StreamHandler()
+	ch.setLevel(debuglevel)
+	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+	ch.setFormatter(formatter)
+	logger.addHandler(ch)
+    
 	settings = WebKit.WebSettings()
 	for setting in webkit_settings:
 		settings.set_property(*setting)
@@ -227,7 +288,7 @@ if __name__ == "__main__":
 
 	load_cookies()
 	dimensions = load_config()
-	print dimensions
+	#print dimensions
 
 	view = WebKit.WebView()
 	view.set_settings(settings)
@@ -247,8 +308,9 @@ if __name__ == "__main__":
 
 	view.connect("navigation-requested", on_nav_req)
 	view.connect("new-window-policy-decision-requested", open_external_link)
-	GLib.timeout_add_seconds(refresh_time, reload_main)
-	reload_main()
+	view.connect("notify::load-status", anchor_tweets, sw)
+	GLib.timeout_add_seconds(refresh_time, reload_main, view, sw)
+	view.open(main_url)
 	Gtk.main()
 
 
