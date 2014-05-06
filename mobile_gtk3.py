@@ -20,6 +20,9 @@ __version__ = "dev.%s" % (time.strftime("%Y.%m.%d", time.localtime(os.path.getmt
 # Config
 ##################
 
+# Default username
+default_username = "WasabiFlux"
+
 # Twitter URL
 main_url = "https://mobile.twitter.com/"
 
@@ -34,16 +37,16 @@ config_save_interval = 120
 
 # WebKit settings
 webkit_settings = [
-	('enable-default-context-menu', True),
-	('enable-java-applet', False),
-	('enable-plugins', False),
-	('enable-page-cache', True),
-	('enable-offline-web-application-cache', True),
-	('enable-html5-local-storage', True),
-	('enable-html5-database', True),
-	('enable-xss-auditor', True),
-	('enable-dns-prefetching', True),
-	('resizable-text-areas', True)
+    ('enable-default-context-menu', True),
+    ('enable-java-applet', False),
+    ('enable-plugins', False),
+    ('enable-page-cache', True),
+    ('enable-offline-web-application-cache', True),
+    ('enable-html5-local-storage', True),
+    ('enable-html5-database', True),
+    ('enable-xss-auditor', True),
+    ('enable-dns-prefetching', True),
+    ('resizable-text-areas', True)
 ]
 
 # User Agent
@@ -78,7 +81,7 @@ photo_workaround = True
 config_filename = "twitter.conf"
 config_path = os.path.join(config_dir_path, config_filename)
 
-cookie_filename = "cookiejar"
+cookie_filename = default_username+".cookiejar"
 cookie_path = os.path.join(config_dir_path, cookie_filename)
 
 
@@ -139,60 +142,60 @@ def resolve_http_redirect(url, depth=0):
         return url
 
 def window_resized(win, event, data=None):
-	global window_geometry, last_save, save_scheduled
-	if event.type == Gdk.EventType.CONFIGURE:
-		window_geometry['x'] = event.x
-		window_geometry['y'] = event.y
-		window_geometry['w'] = event.width
-		window_geometry['h'] = event.height
-		seconds_until_save = int(last_save + config_save_interval - time.time())
-		if not save_scheduled:
-			#print "Scheduling save for %d" % seconds_until_save
-			if seconds_until_save > 0:
-				GLib.timeout_add_seconds(seconds_until_save, save_config)
-				save_scheduled = True
-			else:
-				save_config()
-	return False
+    global window_geometry, last_save, save_scheduled
+    if event.type == Gdk.EventType.CONFIGURE:
+        window_geometry['x'] = event.x
+        window_geometry['y'] = event.y
+        window_geometry['w'] = event.width
+        window_geometry['h'] = event.height
+        seconds_until_save = int(last_save + config_save_interval - time.time())
+        if not save_scheduled:
+            #print "Scheduling save for %d" % seconds_until_save
+            if seconds_until_save > 0:
+                GLib.timeout_add_seconds(seconds_until_save, save_config)
+                save_scheduled = True
+            else:
+                save_config()
+    return False
 
 def save_config():
-	global window_geometry, last_save, save_scheduled
-	#print "Saving new dimensions:", window_geometry
-	config_file = open(config_path, 'w')
-	print >>config_file, "x: %d" % window_geometry['x']
-	print >>config_file, "y: %d" % (window_geometry['y']-32)
-	print >>config_file, "w: %d" % window_geometry['w']
-	print >>config_file, "h: %d" % window_geometry['h']
-	config_file.close()
-	last_save = time.time()
-	save_scheduled = False
-	return False
+    global window_geometry, last_save, save_scheduled
+    #print "Saving new dimensions:", window_geometry
+    config_file = open(config_path, 'w')
+    print >>config_file, "x: %d" % window_geometry['x']
+    print >>config_file, "y: %d" % (window_geometry['y']-32)
+    print >>config_file, "w: %d" % window_geometry['w']
+    print >>config_file, "h: %d" % window_geometry['h']
+    config_file.close()
+    last_save = time.time()
+    save_scheduled = False
+    return False
 
 def load_config():
-	if os.path.exists(config_path):
-		config_file = open(config_path, 'r')
-		config = config_file.read().strip()
-		dimensions = dict(line.split(': ') for line in config.split('\n'))
-		for key, value in dimensions.items():
-			dimensions[key] = int(value)
-		return dimensions
-	else:
-		dimensions = {'w': default_width, 'h': default_height}
-		# Get the upper-right corner of the active monitor
-		root = Gdk.Screen.get_default()
-		root_win = root.get_root_window()
-		cursor = root_win.get_pointer()
-		monitor = root.get_monitor_at_point(*cursor[1:3])
-		m_rect = root.get_monitor_geometry(monitor)
-		dimensions['x'] = m_rect.x + m_rect.width - default_width
-		dimensions['y'] = m_rect.y
-		return dimensions
+    if os.path.exists(config_path):
+        config_file = open(config_path, 'r')
+        config = config_file.read().strip()
+        dimensions = dict(line.split(': ') for line in config.split('\n'))
+        for key, value in dimensions.items():
+            dimensions[key] = int(value)
+        return dimensions
+    else:
+        dimensions = {'w': default_width, 'h': default_height}
+        # Get the upper-right corner of the active monitor
+        root = Gdk.Screen.get_default()
+        root_win = root.get_root_window()
+        cursor = root_win.get_pointer()
+        monitor = root.get_monitor_at_point(*cursor[1:3])
+        m_rect = root.get_monitor_geometry(monitor)
+        dimensions['x'] = m_rect.x + m_rect.width - default_width
+        dimensions['y'] = m_rect.y
+        return dimensions
 
 def load_cookies():
-	cookiejar = Soup.CookieJarText.new(cookie_path, False)
-	cookiejar.set_accept_policy(Soup.CookieJarAcceptPolicy.ALWAYS)
-	session = WebKit.get_default_session()
-	session.add_feature(cookiejar)
+    cookiejar = Soup.CookieJarText.new(cookie_path, False)
+    cookiejar.set_accept_policy(Soup.CookieJarAcceptPolicy.ALWAYS)
+    session = WebKit.get_default_session()
+    session.add_feature(cookiejar)
         
 def on_nav_req(view, frame, req, data=None):
     logger.debug("Nav to %s" % req.get_uri())
@@ -269,48 +272,64 @@ def reload_main(view, sw):
 
 
 if __name__ == "__main__":
-	logger = logging.getLogger(__name__)
-	logger.setLevel(debuglevel)
-	ch = logging.StreamHandler()
-	ch.setLevel(debuglevel)
-	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-	ch.setFormatter(formatter)
-	logger.addHandler(ch)
+    logger = logging.getLogger(__name__)
+    logger.setLevel(debuglevel)
+    ch = logging.StreamHandler()
+    ch.setLevel(debuglevel)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
     
-	settings = WebKit.WebSettings()
-	for setting in webkit_settings:
-		settings.set_property(*setting)
+    username = default_username
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '-u':
+            username = sys.argv[2]
+            del sys.argv[2]
+            del sys.argv[1]
+        elif sys.argv[1].startswith('--username='):
+            username = sys.argv[1][11:]
+            del sys.argv[1]
+        if len(sys.argv) > 1:
+            main_url = sys.argv[1]
+    
+    cookie_filename = username+".cookiejar"
+    cookie_path = os.path.join(config_dir_path, cookie_filename)
+    
+    settings = WebKit.WebSettings()
+    for setting in webkit_settings:
+        settings.set_property(*setting)
 
-	if append_user_agent:
-		settings.set_property('user-agent', settings.get_property('user-agent') + user_agent)
-	else:
-		settings.set_property('user-agent', user_agent)
+    if append_user_agent:
+        settings.set_property('user-agent', settings.get_property('user-agent') + user_agent)
+    else:
+        settings.set_property('user-agent', user_agent)
 
-	load_cookies()
-	dimensions = load_config()
-	#print dimensions
+    load_cookies()
+    dimensions = load_config()
+    #print dimensions
 
-	view = WebKit.WebView()
-	view.set_settings(settings)
+    view = WebKit.WebView()
+    view.set_settings(settings)
+    #view.set_zoom_level(0.85)
 
-	sw = Gtk.ScrolledWindow()
-	sw.add(view)
+    sw = Gtk.ScrolledWindow()
+    sw.add(view)
 
-	win = Gtk.Window()
-	win.set_size_request(min_width, min_height)
-	win.resize(dimensions['w'], dimensions['h'])
-	win.move(dimensions['x'], dimensions['y'])
-	win.add(sw)
-	win.set_title("Twitter")
-	win.connect("destroy", Gtk.main_quit)
-	win.connect("configure-event", window_resized)
-	win.show_all()
+    win = Gtk.Window()
+    win.set_size_request(min_width, min_height)
+    win.resize(dimensions['w'], dimensions['h'])
+    win.move(dimensions['x'], dimensions['y'])
+    win.add(sw)
+    win.set_title(username+" - Twitter")
+    win.connect("destroy", Gtk.main_quit)
+    win.connect("configure-event", window_resized)
+    win.show_all()
 
-	view.connect("navigation-requested", on_nav_req)
-	view.connect("new-window-policy-decision-requested", open_external_link)
-	view.connect("notify::load-status", anchor_tweets, sw)
-	GLib.timeout_add_seconds(refresh_time, reload_main, view, sw)
-	view.open(main_url)
-	Gtk.main()
+    view.connect("navigation-requested", on_nav_req)
+    view.connect("new-window-policy-decision-requested", open_external_link)
+    view.connect("notify::load-status", anchor_tweets, sw)
+    GLib.timeout_add_seconds(refresh_time, reload_main, view, sw)
+    view.open(main_url)
+    Gtk.main()
 
 
